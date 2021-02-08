@@ -17,6 +17,8 @@
 
 #include "web_server.h"
 #include "wifi_handler.h"
+#include "web_server_cfg_service.h"
+#include "web_server_fota_service.h"
 #include "configuration_adapter.h"
 
 static httpd_handle_t server = NULL;
@@ -53,11 +55,26 @@ httpd_uri_t json_post = {
     .handler   = web_srv_json_post_service
 };
 
+httpd_uri_t fota_post = {
+    .uri       = "/fota",
+    .method    = HTTP_POST,
+    .handler   = web_srv_fota_service
+};
 // "/restart?confirm=yes", restart the system
 void restart_task(void* param) {
     web_server_stop();
     ESP_LOGI(TAG, "Restarting...");
     esp_restart();
+}
+
+esp_err_t web_srv_send_rsp(httpd_req_t *req, const char *status, const char * msg, size_t msg_len)
+{
+  if (NULL == status)
+  {
+    httpd_resp_set_status(req, status);
+  }
+  httpd_resp_set_type(req, HTTPD_TYPE_TEXT);
+  return httpd_resp_send(req, msg, strlen(msg));
 }
 
 esp_err_t web_srv_rst_service(httpd_req_t *req) {
@@ -74,12 +91,12 @@ esp_err_t web_srv_rst_service(httpd_req_t *req) {
         }
     }
 
-    httpd_resp_send(req, resp_str, strlen(resp_str));
+    web_srv_send_rsp(req, NULL, resp_str, strlen(resp_str));
     return ESP_OK;
 }
 
 esp_err_t web_srv_index_service(httpd_req_t *req) {
-    httpd_resp_send(req, index_html_start, strlen(index_html_start));
+    web_srv_send_rsp(req, NULL, index_html_start, strlen(index_html_start));
     return ESP_OK;
 }
 
@@ -99,6 +116,7 @@ esp_err_t web_server_start(void) {
         httpd_register_uri_handler(server, &restart);
         httpd_register_uri_handler(server, &json_get);
         httpd_register_uri_handler(server, &json_post);
+        httpd_register_uri_handler(server, &fota_post);
         return ESP_OK;
     }
 
@@ -289,22 +307,29 @@ esp_err_t web_srv_json_get_service(httpd_req_t *req) {
     esp_err_t ret = ESP_OK;
     char* buf = NULL;
     const char* req_str = NULL;
+    char* status = NULL;
+    char* rsp_msg = NULL;
     size_t buf_len = 0;
 
     req_str = httpd_req_get_url_query_str_byref(req, &buf_len);
     if (req_str == NULL) {
-        goto func_ret;
+      status = HTTPD_400; 
+      rsp_msg = "query string is not found.";
+      goto func_ret;
     }
 
     // Get HTTP request key-value pair
     req_str = httpd_query_key_value_byref(req_str, "json", &buf_len);
     if (req_str == NULL) {
-        goto func_ret;
+      status = HTTPD_400; 
+      rsp_msg = "query string is not expected.";
+      goto func_ret;
     }
 
     // HTTP request value decode
     if (buf_len > HTTP_GET_ARG_MAXLEN) {
-        ret = ESP_FAIL;
+      status = HTTPD_400;
+      rsp_msg = "query string is too long.";
         goto func_ret;
     }
     buf = malloc(buf_len + 1);
@@ -316,7 +341,8 @@ esp_err_t web_srv_json_get_service(httpd_req_t *req) {
     buf = NULL;
     if (!json_req) {
         ESP_LOGE("json", "Error before: [%s]", cJSON_GetErrorPtr());
-        ret = ESP_ERR_INVALID_STATE;
+        status = HTTPD_400;
+        rsp_msg = "parse json request failed.";
         goto func_ret;
     }
 
@@ -325,14 +351,14 @@ esp_err_t web_srv_json_get_service(httpd_req_t *req) {
     if (json_resp) {
         buf = cJSON_PrintUnformatted(json_resp);
         cJSON_Delete(json_resp);
-        ret = httpd_resp_send(req, buf, strlen(buf));
-        free(buf);
-        buf = NULL;
+        rsp_msg = buf;
     } else {
-        ret = httpd_resp_send(req, HTTPD_400, strlen(HTTPD_400));
+      status = HTTPD_400;
+      rsp_msg = "unknown methods.";
     }
 
 func_ret:
+    ret = web_srv_send_rsp(req, status, rsp_msg, strlen(rsp_msg));
     if (json_req)
         cJSON_Delete(json_req);
     if (buf)
@@ -345,10 +371,15 @@ func_ret:
 esp_err_t web_srv_json_post_service(httpd_req_t *req) {
     cJSON* json_req = NULL;
     esp_err_t ret = ESP_OK;
+    char* status = NULL;
     char* buf = NULL;
+    char* rsp_msg = NULL;
+
     size_t remaining = req->content_len;
     if (remaining <= 1 || remaining >= 1024) {
-        ret = ESP_FAIL;
+        status = HTTPD_400;
+        rsp_msg = "message too long.";
+        ret = web_srv_send_rsp(req, status, rsp_msg, strlen(rsp_msg));
         goto func_ret;
     }
 
@@ -369,15 +400,16 @@ esp_err_t web_srv_json_post_service(httpd_req_t *req) {
     json_req = cJSON_Parse(buf);
     free(buf);
     buf = NULL;
-    ret = ESP_OK;
     if (!json_req) {
-        ESP_LOGE("json", "Error before: [%s]", cJSON_GetErrorPtr());
-        ret = ESP_ERR_INVALID_STATE;
-        goto func_ret;
+      ESP_LOGE("json", "Error before: [%s]", cJSON_GetErrorPtr());
+      status = HTTPD_400;
+      rsp_msg = "parse failed.";
+      ret = web_srv_send_rsp(req, status, rsp_msg, strlen(rsp_msg));
+      goto func_ret;
     }
 
     // Json Parse
-    httpd_resp_set_status(req, json_post_parser(json_req));
+    ret = web_srv_send_rsp(req, json_post_parser(json_req), NULL, 0);
 
 func_ret:
     if (json_req)

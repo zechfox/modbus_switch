@@ -16,5 +16,6 @@ esp_err_t web_srv_rst_service(httpd_req_t *req);
 esp_err_t web_srv_index_service(httpd_req_t *req);
 esp_err_t web_srv_json_get_service(httpd_req_t *req);
 esp_err_t web_srv_json_post_service(httpd_req_t *req);
+esp_err_t web_srv_send_rsp(httpd_req_t *req, const char *status, const char * msg, size_t msg_len);
 void restart_task(void* param);
 
