@@ -1,7 +1,10 @@
 #include <stdio.h>
 
+#include "esp_system.h"
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/event_groups.h"
 #include "driver/gpio.h"
 
 #include "configuration_adapter.h"
@@ -28,6 +31,7 @@ void switch_adapter_init()
   //configure GPIO with the given settings
   gpio_config(&io_conf);
 
+  // get default switch status
   cfg_adp_get_u8_by_id(CFG_SW_1, &sw_context[SW1].sw_conf.value);
   cfg_adp_get_u8_by_id(CFG_SW_2, &sw_context[SW2].sw_conf.value);
   cfg_adp_get_u8_by_id(CFG_SW_3, &sw_context[SW3].sw_conf.value);
@@ -37,12 +41,19 @@ void switch_adapter_init()
 
 }
 
+// this will change run time switch status, and not impact on default status.
 esp_err_t switch_adapter_set_status(uint8_t sw_index, enum switch_status status)
 {
   if (sw_index < 3)
   {
+    if (NULL == sw_context[sw_index].sw_mutex_req)
+    {
+      sw_context[sw_index].sw_mutex_req = xSemaphoreCreateMutex();
+    }
+    xSemaphoreTake(sw_context[sw_index].sw_mutex_req, portMAX_DELAY);
     gpio_set_level(sw_context[sw_index].sw_gpio_pin, status);
     sw_context[sw_index].sw_conf.sw_status = status;
+    xSemaphoreGive(sw_context[sw_index].sw_mutex_req);
   }
   else
     return ESP_ERR_NOT_SUPPORTED;
@@ -54,8 +65,15 @@ static esp_err_t switch_adapter_sw_toggling(uint8_t sw_index)
 {
   if (sw_index < 3)
   {
+    if (NULL == sw_context[sw_index].sw_mutex_req)
+    {
+      sw_context[sw_index].sw_mutex_req = xSemaphoreCreateMutex();
+    }
+    xSemaphoreTake(sw_context[sw_index].sw_mutex_req, portMAX_DELAY);
     sw_context[sw_index].sw_conf.sw_status ^= 0x1;
     gpio_set_level(sw_context[sw_index].sw_gpio_pin, sw_context[sw_index].sw_conf.sw_status);
+    xSemaphoreGive(sw_context[sw_index].sw_mutex_req);
+
   }
   else
     return ESP_ERR_NOT_SUPPORTED;
@@ -73,22 +91,25 @@ static void switch_adapter_hold_switch(uint8_t sw_index)
   switch_adapter_sw_toggling(sw_index);
 }
 
-void switch_adapter_chg_sta(uint8_t sw_index)
+bool switch_adapter_chg_sta(uint8_t sw_index, bool sw_status)
 {
   if (sw_index >=3 )
-    return;
+    return 0;
 
   if (TOGGLING == sw_context[sw_index].sw_conf.sw_type)
   {
-    switch_adapter_sw_toggling(sw_index);
+    switch_adapter_set_status(sw_index, (enum switch_status) sw_status);
   }
   else
   {
-    if (0 != sw_context[sw_index].sw_conf.sw_hold_duration)
+    if (0 != sw_context[sw_index].sw_conf.sw_hold_duration
+        && sw_status)
     {
+      // only high value will trigger hold switch
       switch_adapter_hold_switch(sw_index); 
     }
   }
+  return sw_context[sw_index].sw_conf.sw_status; 
 }
 
 esp_err_t switch_adapter_get_status(uint8_t sw_index, uint8_t * status)

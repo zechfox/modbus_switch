@@ -30,6 +30,7 @@ void app_main()
   ESP_ERROR_CHECK(esp_netif_init()); // mDNS Implies tcpip_adapter_init();
   ESP_ERROR_CHECK(esp_event_loop_create_default());
 
+  switch_adapter_init();
   // configurationServer
   ESP_ERROR_CHECK(web_server_start());
   modbus_tcp_server_start();

@@ -1,4 +1,7 @@
 
+#include "freertos/event_groups.h"
+#include "esp_netif.h"
+
 
 #define GPIO_OUTPUT_IO_0    15
 #define GPIO_OUTPUT_IO_1    16
@@ -35,11 +38,12 @@ typedef union switch_conf {
 
 typedef struct switch_context {
   uint8_t sw_gpio_pin;
+  SemaphoreHandle_t  sw_mutex_req;
   switch_conf_t sw_conf;
 } switch_context_t;
 
 void switch_adapter_init();
 esp_err_t switch_adapter_set_status(uint8_t sw_index, enum switch_status status);
-void switch_adapter_chg_sta(uint8_t sw_index);
+bool switch_adapter_chg_sta(uint8_t sw_index, bool sw_status);
 esp_err_t switch_adapter_get_status(uint8_t sw_index, uint8_t * status);
 

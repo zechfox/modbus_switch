@@ -142,8 +142,7 @@ void modbus_tcp_server_task(void* param)
                (uint32_t)reg_info.type,
                (uint32_t)reg_info.address,
                (uint32_t)reg_info.size);
-      switch_adapter_get_status((uint8_t)reg_info.mb_offset, reg_info.address);
-      if (coil_reg_params.coils_port1 == 0xFF) break;
+      
     } else if (event & MB_EVENT_COILS_WR) {
       ESP_ERROR_CHECK(mbc_slave_get_param_info(&reg_info, MB_PAR_INFO_GET_TOUT));
       ESP_LOGI(SLAVE_TAG, "COILS WRITE (%u us), ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
@@ -160,11 +159,23 @@ void modbus_tcp_server_task(void* param)
   }
 }
 
+static void update_switch_register(uint8_t sw_index, bool status)
+{
+  coil_reg_params.coils_port0 |= (status << sw_index);
+}
+
+static bool get_switch_register_status(uint8_t sw_index)
+{
+  return (bool) ((coil_reg_params.coils_port0 & (0x1 << sw_index)) >> sw_index);
+
+}
+
 void modbus_tcp_server_coil_task(void* param)
 {
   uint8_t sw_index = ((uint32_t)param & 0xFF);
-
-  switch_adapter_chg_sta(sw_index);
+  bool sw_status = switch_adapter_chg_sta(sw_index, get_switch_register_status(sw_index));
+  // update modbus register in case it's hold switch
+  update_switch_register(sw_index, sw_status);
   vTaskDelete( NULL );
 }
 
@@ -183,6 +194,15 @@ void modbus_tcp_server_setup_reg_data(void)
 
   coil_reg_params.coils_port0 = 0x55;
   coil_reg_params.coils_port1 = 0xAA;
+
+  // get switch default value
+  uint8_t switch_value = 0;
+  cfg_adp_get_u8_by_id(CFG_SW_1, &switch_value);
+  update_switch_register(0, switch_value & 0x1);
+  cfg_adp_get_u8_by_id(CFG_SW_2, &switch_value);
+  update_switch_register(1, switch_value & 0x1);
+  cfg_adp_get_u8_by_id(CFG_SW_3, &switch_value);
+  update_switch_register(2, switch_value & 0x1);
 
   input_reg_params.input_data0 = 1.12;
   input_reg_params.input_data1 = 2.34;
