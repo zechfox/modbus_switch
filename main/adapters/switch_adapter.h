@@ -5,9 +5,9 @@
 
 #define GPIO_OUTPUT_IO_0    15
 #define GPIO_OUTPUT_IO_1    16
-#define SW_1_GPIO_PIN 15
-#define SW_2_GPIO_PIN 16
-#define SW_3_GPIO_PIN 17
+#define SW_1_GPIO_PIN 12
+#define SW_2_GPIO_PIN 13
+#define SW_3_GPIO_PIN 16
 
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<GPIO_OUTPUT_IO_0) | (1ULL<<GPIO_OUTPUT_IO_1))
 #define SW_PIN_SEL ((1ULL<<SW_1_GPIO_PIN) | (1ULL<<SW_2_GPIO_PIN) | (1ULL<<SW_3_GPIO_PIN))
