@@ -3,6 +3,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_event.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -18,22 +19,40 @@
 
 #define SLAVE_TAG "modbus tcp slave"
 
+static void sta_got_ip(void *arg, esp_event_base_t event_base,
+                       int32_t event_id, void *event_data)
+{
+  ESP_LOGI(SLAVE_TAG, "Modbus slave is switching to STA.");
+  ESP_ERROR_CHECK(mbc_slave_destroy());
+  modbus_tcp_server_init(0);
+  ESP_ERROR_CHECK(mbc_slave_start());
+  ESP_LOGI(SLAVE_TAG, "Modbus slave stack initialized in STA.");
+}
+
 void modbus_tcp_server_start()
 {
-  modbus_tcp_server_init();
+  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &sta_got_ip, NULL));
+
+  // default AP mode, switch to STA later if STA connected.
+  modbus_tcp_server_init(1);
   ESP_ERROR_CHECK(mbc_slave_start());
-  ESP_LOGI(SLAVE_TAG, "Modbus slave stack initialized.");
+  ESP_LOGI(SLAVE_TAG, "Modbus slave stack initialized in AP.");
   xTaskCreate(modbus_tcp_server_task, "modbus_tcp_server_task", 2048, NULL, 2, NULL);
 }
 
-void modbus_tcp_server_init()
+void modbus_tcp_server_init(bool is_ap)
 {
   void* mbc_slave_handler = NULL;
 
   ESP_ERROR_CHECK(mbc_slave_init_tcp(&mbc_slave_handler)); // Initialization of Modbus controller
 
-  
-  mb_register_area_descriptor_t reg_area; // Modbus register area descriptor structure
+  modbus_tcp_server_setup(is_ap);
+
+  modbus_tcp_server_setup_reg_data(); // Set values into known state
+}
+
+void modbus_tcp_server_setup(bool is_ap)
+{
 
   mb_communication_info_t comm_info = { 0 };
   comm_info.ip_port = MB_TCP_PORT_NUMBER;
@@ -46,48 +65,12 @@ void modbus_tcp_server_init()
   comm_info.ip_addr = NULL;
   void * nif = NULL;
   // always used in STA mode
-  ESP_ERROR_CHECK(tcpip_adapter_get_netif(TCPIP_ADAPTER_IF_STA, &nif));
+  ESP_ERROR_CHECK(tcpip_adapter_get_netif(is_ap, &nif));
   comm_info.ip_netif_ptr = nif;
   // Setup communication parameters and start stack
   ESP_ERROR_CHECK(mbc_slave_setup((void*)&comm_info));
-
-  // The code below initializes Modbus register area descriptors
-  // for Modbus Holding Registers, Input Registers, Coils and Discrete Inputs
-  // Initialization should be done for each supported Modbus register area according to register map.
-  // When external master trying to access the register in the area that is not initialized
-  // by mbc_slave_set_descriptor() API call then Modbus stack
-  // will send exception response for this register area.
-  reg_area.type = MB_PARAM_HOLDING; // Set type of register area
-  reg_area.start_offset = MB_REG_HOLDING_START; // Offset of register area in Modbus protocol
-  reg_area.address = (void*)&holding_reg_params; // Set pointer to storage instance
-  reg_area.size = sizeof(holding_reg_params); // Set the size of register storage instance
-  ESP_ERROR_CHECK(mbc_slave_set_descriptor(reg_area));
-
-  // Initialization of Input Registers area
-  reg_area.type = MB_PARAM_INPUT;
-  reg_area.start_offset = MB_REG_INPUT_START;
-  reg_area.address = (void*)&input_reg_params;
-  reg_area.size = sizeof(input_reg_params);
-  ESP_ERROR_CHECK(mbc_slave_set_descriptor(reg_area));
-
-  // Initialization of Coils register area
-  reg_area.type = MB_PARAM_COIL;
-  reg_area.start_offset = MB_REG_COILS_START;
-  reg_area.address = (void*)&coil_reg_params;
-  reg_area.size = sizeof(coil_reg_params);
-  ESP_ERROR_CHECK(mbc_slave_set_descriptor(reg_area));
-
-  // Initialization of Discrete Inputs register area
-  reg_area.type = MB_PARAM_DISCRETE;
-  reg_area.start_offset = MB_REG_DISCRETE_INPUT_START;
-  reg_area.address = (void*)&discrete_reg_params;
-  reg_area.size = sizeof(discrete_reg_params);
-  ESP_ERROR_CHECK(mbc_slave_set_descriptor(reg_area));
-
-
-  modbus_tcp_server_setup_reg_data(); // Set values into known state
 }
-
+ 
 void modbus_tcp_server_task(void* param)
 {
   ESP_LOGI(SLAVE_TAG, "Start modbus server...");
@@ -186,6 +169,40 @@ void modbus_tcp_server_coil_task(void* param)
 
 void modbus_tcp_server_setup_reg_data(void)
 {
+  mb_register_area_descriptor_t reg_area; // Modbus register area descriptor structure
+  // The code below initializes Modbus register area descriptors
+  // for Modbus Holding Registers, Input Registers, Coils and Discrete Inputs
+  // Initialization should be done for each supported Modbus register area according to register map.
+  // When external master trying to access the register in the area that is not initialized
+  // by mbc_slave_set_descriptor() API call then Modbus stack
+  // will send exception response for this register area.
+  reg_area.type = MB_PARAM_HOLDING; // Set type of register area
+  reg_area.start_offset = MB_REG_HOLDING_START; // Offset of register area in Modbus protocol
+  reg_area.address = (void*)&holding_reg_params; // Set pointer to storage instance
+  reg_area.size = sizeof(holding_reg_params); // Set the size of register storage instance
+  ESP_ERROR_CHECK(mbc_slave_set_descriptor(reg_area));
+
+  // Initialization of Input Registers area
+  reg_area.type = MB_PARAM_INPUT;
+  reg_area.start_offset = MB_REG_INPUT_START;
+  reg_area.address = (void*)&input_reg_params;
+  reg_area.size = sizeof(input_reg_params);
+  ESP_ERROR_CHECK(mbc_slave_set_descriptor(reg_area));
+
+  // Initialization of Coils register area
+  reg_area.type = MB_PARAM_COIL;
+  reg_area.start_offset = MB_REG_COILS_START;
+  reg_area.address = (void*)&coil_reg_params;
+  reg_area.size = sizeof(coil_reg_params);
+  ESP_ERROR_CHECK(mbc_slave_set_descriptor(reg_area));
+
+  // Initialization of Discrete Inputs register area
+  reg_area.type = MB_PARAM_DISCRETE;
+  reg_area.start_offset = MB_REG_DISCRETE_INPUT_START;
+  reg_area.address = (void*)&discrete_reg_params;
+  reg_area.size = sizeof(discrete_reg_params);
+  ESP_ERROR_CHECK(mbc_slave_set_descriptor(reg_area));
+
   // Define initial state of parameters
   discrete_reg_params.discrete_input1 = 1;
   discrete_reg_params.discrete_input3 = 1;

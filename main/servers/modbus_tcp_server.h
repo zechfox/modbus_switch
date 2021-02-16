@@ -38,6 +38,7 @@
 void modbus_tcp_server_task(void* param);
 void modbus_tcp_server_setup_reg_data(void);
 void modbus_tcp_server_start();
-void modbus_tcp_server_init();
+void modbus_tcp_server_init(bool is_ap);
+void modbus_tcp_server_setup(bool is_ap);
 void modbus_tcp_server_coil_task(void* param);
 
