@@ -69,7 +69,7 @@ void restart_task(void* param) {
 
 esp_err_t web_srv_send_rsp(httpd_req_t *req, const char *status, const char * msg, size_t msg_len)
 {
-  if (NULL == status)
+  if (NULL != status)
   {
     httpd_resp_set_status(req, status);
   }
