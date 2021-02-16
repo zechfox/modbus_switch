@@ -306,39 +306,43 @@ esp_err_t web_srv_json_get_service(httpd_req_t *req) {
     cJSON* json_req = NULL;
     esp_err_t ret = ESP_OK;
     char* buf = NULL;
-    const char* req_str = NULL;
+    char* raw_json = NULL;
+    char* json_buf = NULL;
     char* status = NULL;
     char* rsp_msg = NULL;
     size_t buf_len = 0;
 
-    req_str = httpd_req_get_url_query_str_byref(req, &buf_len);
-    if (req_str == NULL) {
+    buf_len = httpd_req_get_url_query_len(req) + 1;
+    // HTTP request value decode
+    if (buf_len <= 0 || buf_len > HTTP_GET_ARG_MAXLEN) {
+      status = HTTPD_400;
+      rsp_msg = "query string has wrong size.";
+      goto func_ret;
+    }
+    buf = malloc(buf_len);
+
+    if (ESP_OK != httpd_req_get_url_query_str(req, buf, buf_len))
+    {
       status = HTTPD_400; 
       rsp_msg = "query string is not found.";
       goto func_ret;
     }
 
-    // Get HTTP request key-value pair
-    req_str = httpd_query_key_value_byref(req_str, "json", &buf_len);
-    if (req_str == NULL) {
+    // it's suppose key value less than request's length.
+    // buf_len is enough.
+    raw_json = malloc(buf_len);
+    if (ESP_OK != httpd_query_key_value(buf, "json", raw_json, buf_len))
+    {
       status = HTTPD_400; 
-      rsp_msg = "query string is not expected.";
+      rsp_msg = "query string is not found.";
       goto func_ret;
     }
 
-    // HTTP request value decode
-    if (buf_len > HTTP_GET_ARG_MAXLEN) {
-      status = HTTPD_400;
-      rsp_msg = "query string is too long.";
-        goto func_ret;
-    }
-    buf = malloc(buf_len + 1);
-    buf_len = httpd_query_value_decode(req_str, buf_len, buf);
+    json_buf = malloc(buf_len);
+    httpd_query_value_decode(raw_json, strlen(raw_json), json_buf);
 
     // Json Parse
-    json_req = cJSON_Parse(buf);
-    free(buf);
-    buf = NULL;
+    json_req = cJSON_Parse(json_buf);
     if (!json_req) {
         ESP_LOGE("json", "Error before: [%s]", cJSON_GetErrorPtr());
         status = HTTPD_400;
@@ -349,9 +353,8 @@ esp_err_t web_srv_json_get_service(httpd_req_t *req) {
     // Generate and send the response
     cJSON* json_resp = json_get_parser(json_req);
     if (json_resp) {
-        buf = cJSON_PrintUnformatted(json_resp);
+        rsp_msg = cJSON_PrintUnformatted(json_resp);
         cJSON_Delete(json_resp);
-        rsp_msg = buf;
     } else {
       status = HTTPD_400;
       rsp_msg = "unknown methods.";
@@ -360,9 +363,16 @@ esp_err_t web_srv_json_get_service(httpd_req_t *req) {
 func_ret:
     ret = web_srv_send_rsp(req, status, rsp_msg, strlen(rsp_msg));
     if (json_req)
-        cJSON_Delete(json_req);
+      cJSON_Delete(json_req);
     if (buf)
-        free(buf);
+      free(buf);
+    if (raw_json)
+      free(raw_json);
+    if (json_buf)
+      free(json_buf);
+    if (rsp_msg)
+      free(rsp_msg);
+
     return ret;
 }
 

@@ -181,6 +181,11 @@ void wifi_ap_load_cfg(wifi_config_t* wifi_config) {
     if (strlen((char*) wifi_config->ap.password) == 0) {
         auth = WIFI_AUTH_OPEN;
     }
+    if (0 == wifi_config->ap.max_connection)
+    {
+      // at lease 1 connection.
+      wifi_config->ap.max_connection = 1;
+    }
     wifi_config->ap.authmode = auth;
 }
 
