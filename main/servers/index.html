@@ -617,16 +617,20 @@ function startUploading() {
   var oProgress = document.getElementById('progress');
   oProgress.style.display = 'block';
   oProgress.style.width = '0px';
-  // get form data for POSTing
-  //var vFD = document.getElementById('upload_form').getFormData(); // for FF3
-  var vFD = new FormData(document.getElementById('upload_form'));
+  
   // create XMLHttpRequest object, adding few event listeners, and POSTing our data
   xhttp.upload.addEventListener('progress', uploadProgress, false);
   xhttp.addEventListener('load', uploadFinish, false);
   xhttp.addEventListener('error', uploadError, false);
   xhttp.addEventListener('abort', uploadAbort, false);
   xhttp.open('POST', '/fota');
-  xhttp.send(vFD);
+  xhttp.overrideMimeType('text/plain; charset=x-user-defined-binary');
+  var oFile = document.getElementById('upgrade_file').files[0];
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+      xhttp.send(evt.target.result);
+  };
+  reader.readAsArrayBuffer(oFile);
   // set inner timer
   oTimer = setInterval(doInnerUpdates, 300);
 }
@@ -734,7 +738,7 @@ function applySettings() {
       switch_value |= (document.getElementById(default_status).value & 0x1) << 7;
       switch_value |= (document.getElementById(type).value & 0x1 ) << 6;
       switch_value |= (document.getElementById(duration).value & 0x3F);
-      fields_req[key] = switch_value;
+      fields_req[key] = switch_value.toString();
     }
     else
     {
