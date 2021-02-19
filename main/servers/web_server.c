@@ -160,9 +160,18 @@ static const char* json_post_set_fields(cJSON* req_array) {
     cJSON* req_iterator = NULL;
     cJSON_ArrayForEach(req_iterator, req_array) {
         char* field_name = req_iterator->string;
-        char* field_value = cJSON_GetStringValue(req_iterator);
+        char* field_value = NULL;
+        if (cJSON_IsString(req_iterator))
+        {
+          field_value = cJSON_GetStringValue(req_iterator);
+        }
+        else
+        {
+          continue;
+        }
+
         enum cfg_data_idt cfg_id = cfg_adp_id_from_name(field_name);
-        if (cfg_adp_set_by_id_from_raw(cfg_id, field_value) != ESP_OK) {
+        if (CFG_IDT_MAX == cfg_id || cfg_adp_set_by_id_from_raw(cfg_id, field_value) != ESP_OK) {
             ret = HTTPD_404;
         }
     }
@@ -419,7 +428,8 @@ esp_err_t web_srv_json_post_service(httpd_req_t *req) {
     }
 
     // Json Parse
-    ret = web_srv_send_rsp(req, json_post_parser(json_req), NULL, 0);
+    rsp_msg = "OK";
+    ret = web_srv_send_rsp(req, json_post_parser(json_req), rsp_msg, strlen(rsp_msg));
 
 func_ret:
     if (json_req)
