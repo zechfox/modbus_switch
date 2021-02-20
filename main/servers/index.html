@@ -560,6 +560,8 @@ var iPreviousBytesLoaded = 0;
 var iMaxFilesize = 1048576; // 1MB
 var oTimer = 0;
 var sResultFileSize = '';
+var readStaTimer = 0;
+var readAtTimer = 0;
 function secondsToTime(secs) { // we will use this function to convert seconds in normal time format
   var hr = Math.floor(secs / 3600);
   var min = Math.floor((secs - (hr * 3600))/60);
@@ -617,18 +619,20 @@ function startUploading() {
   var oProgress = document.getElementById('progress');
   oProgress.style.display = 'block';
   oProgress.style.width = '0px';
+  clearInterval(readStaTimer);
+  clearInterval(readApTimer);
   
   // create XMLHttpRequest object, adding few event listeners, and POSTing our data
   xhttp.upload.addEventListener('progress', uploadProgress, false);
-  xhttp.addEventListener('load', uploadFinish, false);
-  xhttp.addEventListener('error', uploadError, false);
-  xhttp.addEventListener('abort', uploadAbort, false);
-  xhttp.open('POST', '/fota');
+  xhttp.upload.addEventListener('load', uploadFinish, false);
+  xhttp.upload.addEventListener('error', uploadError, false);
+  xhttp.upload.addEventListener('abort', uploadAbort, false);
+  xhttp.open('POST', '/fota', true);
   xhttp.overrideMimeType('text/plain; charset=x-user-defined-binary');
   var oFile = document.getElementById('upgrade_file').files[0];
   const reader = new FileReader();
   reader.onload = function(evt) {
-      xhttp.send(evt.target.result);
+    xhttp.send(evt.target.result);
   };
   reader.readAsArrayBuffer(oFile);
   // set inner timer
@@ -682,14 +686,20 @@ function uploadFinish(e) { // upload successfully finished
   document.getElementById('filesize').innerHTML = sResultFileSize;
   document.getElementById('remaining').innerHTML = '| 00:00:00';
   clearInterval(oTimer);
+  readStaTimer = setInterval(readStaStatus, 1000);
+  readApTimer = setInterval(readApStatus, 1000);
 }
 function uploadError(e) { // upload error
   document.getElementById('error2').style.display = 'block';
   clearInterval(oTimer);
+  readStaTimer = setInterval(readStaStatus, 1000);
+  readApTimer = setInterval(readApStatus, 1000);
 }
 function uploadAbort(e) { // upload abort
   document.getElementById('abort').style.display = 'block';
   clearInterval(oTimer);
+  readStaTimer = setInterval(readStaStatus, 1000);
+  readApTimer = setInterval(readApStatus, 1000);
 }
 function xhttp_send_internal(method, json_payload) {
 	if (method === "get") {
@@ -791,8 +801,8 @@ function readApStatus() {
 
 readSettings();
 readStaStatus();
-setInterval(readStaStatus, 1000);
-setInterval(readApStatus, 1000);
+readStaTimer = setInterval(readStaStatus, 1000);
+readApTimer = setInterval(readApStatus, 1000);
 </script>
 
 </body>
