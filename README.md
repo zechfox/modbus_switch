@@ -7,8 +7,8 @@
 ## Adapted Hardware:
 https://github.com/meijie-jesse/Spark-ESP8266-Smart-Device
 ## TODO List
-  1. restruct code.
-  2. Integrate WebServer for configuration.
-  3. Configure Slave Id in AP mode, then broadcast configured slave Id in mDNS.
-  4. 
+  1. ~~restruct code.~~
+  2. ~~Integrate WebServer for configuration.~~
+  3. ~~Configure Slave Id in AP mode, then broadcast configured slave Id in mDNS.~~ slave ID has can be replaced by IP in tcp modbus.
+  4. ~~FOTA~~
 
