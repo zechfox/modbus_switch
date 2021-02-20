@@ -61,17 +61,17 @@ esp_err_t web_srv_fota_service(httpd_req_t *req) {
       break; 
     }
     if (data_read > 0) {
-//      ESP_LOG_BUFFER_HEX(otaTag, upgrade_data_buf, data_read);
+    //  ESP_LOG_BUFFER_HEXDUMP(otaTag, upgrade_data_buf, data_read, ESP_LOG_INFO);
       ota_write_err = esp_ota_write( update_handle, (const void *)upgrade_data_buf, data_read);
       if (ota_write_err != ESP_OK) {
         break;
       }
       binary_file_len += data_read;
-      ESP_LOGI(otaTag, "Written image length %d", binary_file_len);
+     // ESP_LOGI(otaTag, "Written image length %d", binary_file_len);
     }
   }
   free(upgrade_data_buf);
-  ESP_LOGD(otaTag, "Total binary data length writen: %d", binary_file_len);
+  ESP_LOGI(otaTag, "Total binary data length writen: %d", binary_file_len);
 
   esp_err_t ota_end_err = esp_ota_end(update_handle);
   if (ESP_OK != err)
