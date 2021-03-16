@@ -328,7 +328,6 @@ void wifi_init_sta() {
 
 void wifi_cfg_sta() {
     wifi_config_t wifi_config = { 0 };
-    wifi_sta_load_cfg(&wifi_config);
 
     xSemaphoreTake(s_wifi_cfg.sta_mutex_req, portMAX_DELAY);
     if (s_wifi_cfg.sta_ssid_req[0] != '\0') {
@@ -345,7 +344,7 @@ void wifi_cfg_sta() {
         s_wifi_cfg.sta_pass_req[0] = '\0';
     }
     xSemaphoreGive(s_wifi_cfg.sta_mutex_req);
-
+    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
     ESP_LOGI(TAG, "Connecting to %s...", wifi_config.sta.ssid);
 }
 
