@@ -25,7 +25,6 @@ static void modbus_server_got_ip(void *arg, esp_event_base_t event_base,
 {
   ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
   ESP_LOGI(SLAVE_TAG, "Modbus slave is got IP: [%s]. Start Modbus server.", ip4addr_ntoa(&event->ip_info.ip));
-  ESP_ERROR_CHECK(mbc_slave_start());
   modbus_tcp_server_setup();
   modbus_tcp_server_setup_reg_data(); // Set values into known state
 }
@@ -42,6 +41,7 @@ void modbus_tcp_server_init()
   void* mbc_slave_handler = NULL;
   ESP_ERROR_CHECK(mbc_slave_init_tcp(&mbc_slave_handler)); // Initialization of Modbus controller
   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &modbus_server_got_ip, NULL));
+  ESP_ERROR_CHECK(mbc_slave_start());
 }
 
 void modbus_tcp_server_setup()
