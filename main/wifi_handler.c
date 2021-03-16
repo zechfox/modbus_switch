@@ -336,7 +336,7 @@ void wifi_cfg_sta() {
         wifi_config.sta.ssid[WIFI_SSID_MAXLEN - 1] = '\0';
         if (s_wifi_cfg.sta_pass_req[0] != '\0') {
             strcpy((char*) wifi_config.sta.password, s_wifi_cfg.sta_pass_req);
-            s_wifi_cfg.sta_pass_req[WIFI_PASS_MAXLEN - 1] = '\0';
+            wifi_config.sta.password[WIFI_PASS_MAXLEN - 1] = '\0';
         } else {
             wifi_config.sta.password[0] = '\0';
         }
