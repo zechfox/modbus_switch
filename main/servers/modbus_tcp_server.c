@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_event.h"
+#include "esp_wifi.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -19,41 +20,33 @@
 
 #define SLAVE_TAG "modbus tcp slave"
 
-static void sta_got_ip(void *arg, esp_event_base_t event_base,
-                       int32_t event_id, void *event_data)
+static void modbus_server_got_ip(void *arg, esp_event_base_t event_base,
+                                 int32_t event_id, void *event_data)
 {
-  ESP_LOGI(SLAVE_TAG, "Modbus slave is switching to STA.");
-  ESP_ERROR_CHECK(mbc_slave_destroy());
-  modbus_tcp_server_init(0);
+  ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+  ESP_LOGI(SLAVE_TAG, "Modbus slave is got IP: [%s]. Start Modbus server.", ip4addr_ntoa(&event->ip_info.ip));
   ESP_ERROR_CHECK(mbc_slave_start());
-  ESP_LOGI(SLAVE_TAG, "Modbus slave stack initialized in STA.");
+  modbus_tcp_server_setup();
+  modbus_tcp_server_setup_reg_data(); // Set values into known state
 }
 
 void modbus_tcp_server_start()
 {
-  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &sta_got_ip, NULL));
-
-  // default AP mode, switch to STA later if STA connected.
-  modbus_tcp_server_init(1);
-  ESP_ERROR_CHECK(mbc_slave_start());
-  ESP_LOGI(SLAVE_TAG, "Modbus slave stack initialized in AP.");
+  modbus_tcp_server_init();
   xTaskCreate(modbus_tcp_server_task, "modbus_tcp_server_task", 2048, NULL, 2, NULL);
+  ESP_LOGI(SLAVE_TAG, "Modbus slave is initialized.");
 }
 
-void modbus_tcp_server_init(bool is_ap)
+void modbus_tcp_server_init()
 {
   void* mbc_slave_handler = NULL;
-
   ESP_ERROR_CHECK(mbc_slave_init_tcp(&mbc_slave_handler)); // Initialization of Modbus controller
-
-  modbus_tcp_server_setup(is_ap);
-
-  modbus_tcp_server_setup_reg_data(); // Set values into known state
+  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &modbus_server_got_ip, NULL));
 }
 
-void modbus_tcp_server_setup(bool is_ap)
+void modbus_tcp_server_setup()
 {
-
+  wifi_mode_t wifi_mode;
   mb_communication_info_t comm_info = { 0 };
   comm_info.ip_port = MB_TCP_PORT_NUMBER;
 #if !CONFIG_EXAMPLE_CONNECT_IPV6
@@ -64,11 +57,12 @@ void modbus_tcp_server_setup(bool is_ap)
   comm_info.ip_mode = MB_MODE_TCP;
   comm_info.ip_addr = NULL;
   void * nif = NULL;
-  // always used in STA mode
-  ESP_ERROR_CHECK(tcpip_adapter_get_netif(is_ap, &nif));
+  ESP_ERROR_CHECK(esp_wifi_get_mode(&wifi_mode));
+  ESP_ERROR_CHECK(tcpip_adapter_get_netif(WIFI_MODE_AP == wifi_mode, &nif));
   comm_info.ip_netif_ptr = nif;
   // Setup communication parameters and start stack
   ESP_ERROR_CHECK(mbc_slave_setup((void*)&comm_info));
+  ESP_LOGI(SLAVE_TAG, "Modbus slave is setup.");
 }
  
 void modbus_tcp_server_task(void* param)
@@ -230,4 +224,5 @@ void modbus_tcp_server_setup_reg_data(void)
   input_reg_params.input_data1 = 2.34;
   input_reg_params.input_data2 = 3.56;
   input_reg_params.input_data3 = 4.78;
+  ESP_LOGI(SLAVE_TAG, "Registers is initialized.");
 }
