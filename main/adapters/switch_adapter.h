@@ -11,6 +11,10 @@
 
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<GPIO_OUTPUT_IO_0) | (1ULL<<GPIO_OUTPUT_IO_1))
 #define SW_PIN_SEL ((1ULL<<SW_1_GPIO_PIN) | (1ULL<<SW_2_GPIO_PIN) | (1ULL<<SW_3_GPIO_PIN))
+
+// HW switch was designed 'ON' at low level, 'OFF' at high level.
+#define SW_SET_STATUS(p, s) (gpio_set_level(p, !s))
+
 enum switch_index {
   SW1 = 0,
   SW2,

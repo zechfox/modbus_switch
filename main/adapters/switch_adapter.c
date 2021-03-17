@@ -51,7 +51,7 @@ esp_err_t switch_adapter_set_status(uint8_t sw_index, enum switch_status status)
       sw_context[sw_index].sw_mutex_req = xSemaphoreCreateMutex();
     }
     xSemaphoreTake(sw_context[sw_index].sw_mutex_req, portMAX_DELAY);
-    gpio_set_level(sw_context[sw_index].sw_gpio_pin, status);
+    SW_SET_STATUS(sw_context[sw_index].sw_gpio_pin, status);
     sw_context[sw_index].sw_conf.sw_status = status;
     xSemaphoreGive(sw_context[sw_index].sw_mutex_req);
   }
@@ -71,7 +71,7 @@ static esp_err_t switch_adapter_sw_toggling(uint8_t sw_index)
     }
     xSemaphoreTake(sw_context[sw_index].sw_mutex_req, portMAX_DELAY);
     sw_context[sw_index].sw_conf.sw_status ^= 0x1;
-    gpio_set_level(sw_context[sw_index].sw_gpio_pin, sw_context[sw_index].sw_conf.sw_status);
+    SW_SET_STATUS(sw_context[sw_index].sw_gpio_pin, sw_context[sw_index].sw_conf.sw_status);
     xSemaphoreGive(sw_context[sw_index].sw_mutex_req);
 
   }
