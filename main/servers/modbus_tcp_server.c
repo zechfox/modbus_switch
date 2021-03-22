@@ -139,7 +139,7 @@ void modbus_tcp_server_task(void* param)
 static void update_switch_register(uint8_t sw_index, bool status)
 {
   // it may conficts with modbus read operation.
-  coil_reg_params.coils_port0 |= (status << sw_index);
+  coil_reg_params.coils_port0 = (coil_reg_params.coils_port0 & ~(1UL << sw_index)) | (status << sw_index);
   ESP_LOGI(SLAVE_TAG, "COILS Register changed: %d, by [Switch %d Status %d].",
            coil_reg_params.coils_port0,
            sw_index, status);
@@ -148,7 +148,7 @@ static void update_switch_register(uint8_t sw_index, bool status)
 
 static bool get_switch_register_status(uint8_t sw_index)
 {
-  return (bool) ((coil_reg_params.coils_port0 & (0x1 << sw_index)) >> sw_index);
+  return (coil_reg_params.coils_port0 >> sw_index) & 1U;
 
 }
 
