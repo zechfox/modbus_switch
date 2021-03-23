@@ -35,9 +35,9 @@ void switch_adapter_init()
   cfg_adp_get_u8_by_id(CFG_SW_1, &sw_context[SW1].sw_conf.value);
   cfg_adp_get_u8_by_id(CFG_SW_2, &sw_context[SW2].sw_conf.value);
   cfg_adp_get_u8_by_id(CFG_SW_3, &sw_context[SW3].sw_conf.value);
-  switch_adapter_set_status(SW1, sw_context[SW1].sw_conf.sw_status);
-  switch_adapter_set_status(SW2, sw_context[SW2].sw_conf.sw_status);
-  switch_adapter_set_status(SW3, sw_context[SW3].sw_conf.sw_status);
+  SW_SET_STATUS(SW1, sw_context[SW1].sw_conf.conf.sw_status);
+  SW_SET_STATUS(SW2, sw_context[SW2].sw_conf.conf.sw_status);
+  SW_SET_STATUS(SW3, sw_context[SW3].sw_conf.conf.sw_status);
 
   sw_context[SW1].sw_mutex_req = xSemaphoreCreateMutex();
   sw_context[SW2].sw_mutex_req = xSemaphoreCreateMutex();
@@ -53,7 +53,7 @@ esp_err_t switch_adapter_set_status(uint8_t sw_index, enum switch_status status)
         && pdTRUE == xSemaphoreTake(sw_context[sw_index].sw_mutex_req, portMAX_DELAY))
     {
       SW_SET_STATUS(sw_context[sw_index].sw_gpio_pin, status);
-      sw_context[sw_index].sw_conf.sw_status = status;
+      sw_context[sw_index].sw_conf.conf.sw_status = status;
       xSemaphoreGive(sw_context[sw_index].sw_mutex_req);
     }
   }
@@ -70,8 +70,8 @@ static esp_err_t switch_adapter_sw_toggling(uint8_t sw_index)
     if (NULL != sw_context[sw_index].sw_mutex_req 
         && pdTRUE == xSemaphoreTake(sw_context[sw_index].sw_mutex_req, portMAX_DELAY))
     {
-      sw_context[sw_index].sw_conf.sw_status ^= 0x1;
-      SW_SET_STATUS(sw_context[sw_index].sw_gpio_pin, sw_context[sw_index].sw_conf.sw_status);
+      sw_context[sw_index].sw_conf.conf.sw_status ^= 0x1;
+      SW_SET_STATUS(sw_context[sw_index].sw_gpio_pin, sw_context[sw_index].sw_conf.conf.sw_status);
       xSemaphoreGive(sw_context[sw_index].sw_mutex_req);
     }
   }
@@ -84,7 +84,7 @@ static esp_err_t switch_adapter_sw_toggling(uint8_t sw_index)
 
 static void switch_adapter_hold_switch(uint8_t sw_index)
 {
-  const TickType_t xDelayTimeInTick = pdMS_TO_TICKS(sw_context[sw_index].sw_conf.sw_hold_duration * 1000);
+  const TickType_t xDelayTimeInTick = pdMS_TO_TICKS(sw_context[sw_index].sw_conf.conf.sw_hold_duration * 1000);
 
   switch_adapter_sw_toggling(sw_index);
   vTaskDelay(xDelayTimeInTick);
@@ -96,20 +96,20 @@ bool switch_adapter_chg_sta(uint8_t sw_index, bool sw_status)
   if (sw_index >=3 )
     return 0;
 
-  if (TOGGLING == sw_context[sw_index].sw_conf.sw_type)
+  if (TOGGLING == sw_context[sw_index].sw_conf.conf.sw_type)
   {
     switch_adapter_set_status(sw_index, (enum switch_status) sw_status);
   }
   else
   {
-    if (0 != sw_context[sw_index].sw_conf.sw_hold_duration
+    if (0 != sw_context[sw_index].sw_conf.conf.sw_hold_duration
         && sw_status)
     {
       // only high value will trigger hold switch
       switch_adapter_hold_switch(sw_index); 
     }
   }
-  return sw_context[sw_index].sw_conf.sw_status; 
+  return sw_context[sw_index].sw_conf.conf.sw_status; 
 }
 
 esp_err_t switch_adapter_get_status(uint8_t sw_index, uint8_t * status)
@@ -117,6 +117,6 @@ esp_err_t switch_adapter_get_status(uint8_t sw_index, uint8_t * status)
   if (sw_index >=3 )
     return ESP_ERR_NOT_SUPPORTED;
 
-  *status = sw_context[sw_index].sw_conf.sw_status;
+  *status = sw_context[sw_index].sw_conf.conf.sw_status;
   return ESP_OK;
 }

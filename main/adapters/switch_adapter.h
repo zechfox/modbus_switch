@@ -35,9 +35,11 @@ enum switch_status {
 
 typedef union switch_conf {
   uint8_t value;
-  uint8_t sw_hold_duration:6; // in seconds
-  enum switch_type sw_type:1;
-  enum switch_status sw_status:1;
+  struct conf_t {
+    uint8_t sw_hold_duration:6; // in seconds
+    enum switch_type sw_type:1;
+    enum switch_status sw_status:1;
+  } conf;
 } switch_conf_t;
 
 typedef struct switch_context {
