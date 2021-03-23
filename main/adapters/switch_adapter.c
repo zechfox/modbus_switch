@@ -39,6 +39,9 @@ void switch_adapter_init()
   switch_adapter_set_status(SW2, sw_context[SW2].sw_conf.sw_status);
   switch_adapter_set_status(SW3, sw_context[SW3].sw_conf.sw_status);
 
+  sw_context[SW1].sw_mutex_req = xSemaphoreCreateMutex();
+  sw_context[SW2].sw_mutex_req = xSemaphoreCreateMutex();
+  sw_context[SW3].sw_mutex_req = xSemaphoreCreateMutex();
 }
 
 // this will change run time switch status, and not impact on default status.
@@ -46,10 +49,7 @@ esp_err_t switch_adapter_set_status(uint8_t sw_index, enum switch_status status)
 {
   if (sw_index < 3)
   {
-    if (NULL == sw_context[sw_index].sw_mutex_req)
-    {
-      sw_context[sw_index].sw_mutex_req = xSemaphoreCreateMutex();
-    }
+
     xSemaphoreTake(sw_context[sw_index].sw_mutex_req, portMAX_DELAY);
     SW_SET_STATUS(sw_context[sw_index].sw_gpio_pin, status);
     sw_context[sw_index].sw_conf.sw_status = status;
@@ -65,10 +65,6 @@ static esp_err_t switch_adapter_sw_toggling(uint8_t sw_index)
 {
   if (sw_index < 3)
   {
-    if (NULL == sw_context[sw_index].sw_mutex_req)
-    {
-      sw_context[sw_index].sw_mutex_req = xSemaphoreCreateMutex();
-    }
     xSemaphoreTake(sw_context[sw_index].sw_mutex_req, portMAX_DELAY);
     sw_context[sw_index].sw_conf.sw_status ^= 0x1;
     SW_SET_STATUS(sw_context[sw_index].sw_gpio_pin, sw_context[sw_index].sw_conf.sw_status);
