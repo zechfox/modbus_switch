@@ -146,7 +146,7 @@ static void update_switch_register(uint8_t sw_index, bool status)
 
 }
 
-static bool get_switch_register_status(uint8_t sw_index)
+static bool get_coil_status(uint8_t sw_index)
 {
   return (coil_reg_params.coils_port0 >> sw_index) & 1U;
 
@@ -155,7 +155,7 @@ static bool get_switch_register_status(uint8_t sw_index)
 void modbus_tcp_server_coil_task(void* param)
 {
   uint8_t sw_index = ((uint32_t)param & 0xFF);
-  bool sw_status = switch_adapter_chg_sta(sw_index, get_switch_register_status(sw_index));
+  bool sw_status = switch_adapter_chg_sta(sw_index, get_coil_status(sw_index));
   // update modbus register in case it's hold switch
   update_switch_register(sw_index, sw_status);
   vTaskDelete( NULL );

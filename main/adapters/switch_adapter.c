@@ -3,7 +3,7 @@
 #include "esp_system.h"
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+#include "semphr.h"
 #include "freertos/event_groups.h"
 #include "driver/gpio.h"
 
@@ -49,11 +49,13 @@ esp_err_t switch_adapter_set_status(uint8_t sw_index, enum switch_status status)
 {
   if (sw_index < 3)
   {
-
-    xSemaphoreTake(sw_context[sw_index].sw_mutex_req, portMAX_DELAY);
-    SW_SET_STATUS(sw_context[sw_index].sw_gpio_pin, status);
-    sw_context[sw_index].sw_conf.sw_status = status;
-    xSemaphoreGive(sw_context[sw_index].sw_mutex_req);
+    if (NULL != sw_context[sw_index].sw_mutex_req
+        && pdTRUE == xSemaphoreTake(sw_context[sw_index].sw_mutex_req, portMAX_DELAY))
+    {
+      SW_SET_STATUS(sw_context[sw_index].sw_gpio_pin, status);
+      sw_context[sw_index].sw_conf.sw_status = status;
+      xSemaphoreGive(sw_context[sw_index].sw_mutex_req);
+    }
   }
   else
     return ESP_ERR_NOT_SUPPORTED;
@@ -65,11 +67,13 @@ static esp_err_t switch_adapter_sw_toggling(uint8_t sw_index)
 {
   if (sw_index < 3)
   {
-    xSemaphoreTake(sw_context[sw_index].sw_mutex_req, portMAX_DELAY);
-    sw_context[sw_index].sw_conf.sw_status ^= 0x1;
-    SW_SET_STATUS(sw_context[sw_index].sw_gpio_pin, sw_context[sw_index].sw_conf.sw_status);
-    xSemaphoreGive(sw_context[sw_index].sw_mutex_req);
-
+    if (NULL != sw_context[sw_index].sw_mutex_req 
+        && pdTRUE == xSemaphoreTake(sw_context[sw_index].sw_mutex_req, portMAX_DELAY))
+    {
+      sw_context[sw_index].sw_conf.sw_status ^= 0x1;
+      SW_SET_STATUS(sw_context[sw_index].sw_gpio_pin, sw_context[sw_index].sw_conf.sw_status);
+      xSemaphoreGive(sw_context[sw_index].sw_mutex_req);
+    }
   }
   else
     return ESP_ERR_NOT_SUPPORTED;
