@@ -35,9 +35,9 @@ void switch_adapter_init()
   cfg_adp_get_u8_by_id(CFG_SW_1, &sw_context[SW1].sw_conf.value);
   cfg_adp_get_u8_by_id(CFG_SW_2, &sw_context[SW2].sw_conf.value);
   cfg_adp_get_u8_by_id(CFG_SW_3, &sw_context[SW3].sw_conf.value);
-  SW_SET_STATUS(SW1, sw_context[SW1].sw_conf.conf.sw_status);
-  SW_SET_STATUS(SW2, sw_context[SW2].sw_conf.conf.sw_status);
-  SW_SET_STATUS(SW3, sw_context[SW3].sw_conf.conf.sw_status);
+  SW_SET_STATUS(sw_context[SW1].sw_gpio_pin, sw_context[SW1].sw_conf.conf.sw_status);
+  SW_SET_STATUS(sw_context[SW2].sw_gpio_pin, sw_context[SW2].sw_conf.conf.sw_status);
+  SW_SET_STATUS(sw_context[SW3].sw_gpio_pin, sw_context[SW3].sw_conf.conf.sw_status);
 
   sw_context[SW1].sw_mutex_req = xSemaphoreCreateMutex();
   sw_context[SW2].sw_mutex_req = xSemaphoreCreateMutex();

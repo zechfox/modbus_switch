@@ -1,4 +1,4 @@
-
+#include "driver/gpio.h"
 #include "freertos/event_groups.h"
 #include "esp_netif.h"
 
@@ -13,7 +13,7 @@
 #define SW_PIN_SEL ((1ULL<<SW_1_GPIO_PIN) | (1ULL<<SW_2_GPIO_PIN) | (1ULL<<SW_3_GPIO_PIN))
 
 // HW switch was designed 'ON' at low level, 'OFF' at high level.
-#define SW_SET_STATUS(p, s) (gpio_set_level(p, !s))
+#define SW_SET_STATUS(p, s) (gpio_set_level(p, !(s & 0x1)))
 
 enum switch_index {
   SW1 = 0,
