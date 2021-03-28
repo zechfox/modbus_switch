@@ -212,13 +212,13 @@ void modbus_tcp_server_setup_reg_data(void)
   coil_reg_params.coils_port1 = 0xAA;
 
   // get switch default value
-  uint8_t switch_value = 0;
-  cfg_adp_get_u8_by_id(CFG_SW_1, &switch_value);
-  update_switch_register(0, switch_value & 0x1);
-  cfg_adp_get_u8_by_id(CFG_SW_2, &switch_value);
-  update_switch_register(1, switch_value & 0x1);
-  cfg_adp_get_u8_by_id(CFG_SW_3, &switch_value);
-  update_switch_register(2, switch_value & 0x1);
+  conf_t switch_value = {0};
+  cfg_adp_get_u8_by_id(CFG_SW_1, (uint8_t*)&switch_value);
+  update_switch_register(0, switch_value.sw_status);
+  cfg_adp_get_u8_by_id(CFG_SW_2, (uint8_t*)&switch_value);
+  update_switch_register(1, switch_value.sw_status);
+  cfg_adp_get_u8_by_id(CFG_SW_3, (uint8_t*)&switch_value);
+  update_switch_register(2, switch_value.sw_status);
 
   input_reg_params.input_data0 = 1.12;
   input_reg_params.input_data1 = 2.34;
