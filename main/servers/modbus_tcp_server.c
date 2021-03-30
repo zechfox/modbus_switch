@@ -68,17 +68,16 @@ void modbus_tcp_server_setup()
 void modbus_tcp_server_task(void* param)
 {
   ESP_LOGI(SLAVE_TAG, "Start modbus server...");
-  mb_param_info_t reg_info; // keeps the Modbus registers access information
-  // The cycle below will be terminated when parameter holding_data0
-  // incremented each access cycle reaches the CHAN_DATA_MAX_VAL value.
-  for(;holding_reg_params.holding_data0 < MB_CHAN_DATA_MAX_VAL;) {
+  mb_param_info_t reg_info; 
+  while(1)
+  {
     // Check for read/write events of Modbus master for certain events
     mb_event_group_t event = mbc_slave_check_event(MB_READ_WRITE_MASK);
+    ESP_ERROR_CHECK(mbc_slave_get_param_info(&reg_info, MB_PAR_INFO_GET_TOUT));
     const char* rw_str = (event & MB_READ_MASK) ? "READ" : "WRITE";
     // Filter events and process them accordingly
     if(event & (MB_EVENT_HOLDING_REG_WR | MB_EVENT_HOLDING_REG_RD)) {
       // Get parameter information from parameter queue
-      ESP_ERROR_CHECK(mbc_slave_get_param_info(&reg_info, MB_PAR_INFO_GET_TOUT));
       ESP_LOGI(SLAVE_TAG, "HOLDING %s (%u us), ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
                rw_str,
                (uint32_t)reg_info.time_stamp,
@@ -96,7 +95,6 @@ void modbus_tcp_server_task(void* param)
         portEXIT_CRITICAL();
       }
     } else if (event & MB_EVENT_INPUT_REG_RD) {
-      ESP_ERROR_CHECK(mbc_slave_get_param_info(&reg_info, MB_PAR_INFO_GET_TOUT));
       ESP_LOGI(SLAVE_TAG, "INPUT READ (%u us), ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
                (uint32_t)reg_info.time_stamp,
                (uint32_t)reg_info.mb_offset,
@@ -104,7 +102,6 @@ void modbus_tcp_server_task(void* param)
                (uint32_t)reg_info.address,
                (uint32_t)reg_info.size);
     } else if (event & MB_EVENT_DISCRETE_RD) {
-      ESP_ERROR_CHECK(mbc_slave_get_param_info(&reg_info, MB_PAR_INFO_GET_TOUT));
       ESP_LOGI(SLAVE_TAG, "DISCRETE READ (%u us): ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
                (uint32_t)reg_info.time_stamp,
                (uint32_t)reg_info.mb_offset,
@@ -112,7 +109,6 @@ void modbus_tcp_server_task(void* param)
                (uint32_t)reg_info.address,
                (uint32_t)reg_info.size);
     } else if (event & MB_EVENT_COILS_RD) {
-      ESP_ERROR_CHECK(mbc_slave_get_param_info(&reg_info, MB_PAR_INFO_GET_TOUT));
       ESP_LOGI(SLAVE_TAG, "COILS READ (%u us), ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
                (uint32_t)reg_info.time_stamp,
                (uint32_t)reg_info.mb_offset,
@@ -121,7 +117,6 @@ void modbus_tcp_server_task(void* param)
                (uint32_t)reg_info.size);
       
     } else if (event & MB_EVENT_COILS_WR) {
-      ESP_ERROR_CHECK(mbc_slave_get_param_info(&reg_info, MB_PAR_INFO_GET_TOUT));
       ESP_LOGI(SLAVE_TAG, "COILS WRITE (%u us), ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
                (uint32_t)reg_info.time_stamp,
                (uint32_t)reg_info.mb_offset,
@@ -139,11 +134,12 @@ void modbus_tcp_server_task(void* param)
 static void update_switch_register(uint8_t sw_index, bool status)
 {
   // it may conficts with modbus read operation.
+  portENTER_CRITICAL();
   coil_reg_params.coils_port0 = (coil_reg_params.coils_port0 & ~(1UL << sw_index)) | (status << sw_index);
+  portEXIT_CRITICAL();
   ESP_LOGI(SLAVE_TAG, "COILS Register changed: %d, by [Switch %d Status %d].",
            coil_reg_params.coils_port0,
            sw_index, status);
-
 }
 
 static bool get_coil_status(uint8_t sw_index)
