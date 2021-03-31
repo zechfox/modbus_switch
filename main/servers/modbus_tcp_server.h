@@ -34,11 +34,19 @@
 #define MB_SLAVE_ADDR (CONFIG_MB_SLAVE_ADDR)
 
 #define MB_MDNS_INSTANCE(pref) pref"mb_slave_tcp"
+#define MB_EVENT_QUEUE_SIZE (16)
+#define MB_EVENT_QUEUE_TOUT (10)
 
-void modbus_tcp_server_task(void* param);
+typedef struct modbus_event
+{
+  mb_event_group_t mb_event;
+  mb_param_info_t mb_params;
+}modbus_event_t;
+
+void modbus_tcp_switch_task(void* param);
+void modbus_tcp_distribute_event_task(void* param);
 void modbus_tcp_server_setup_reg_data(void);
 void modbus_tcp_server_start();
 void modbus_tcp_server_init();
 void modbus_tcp_server_setup();
-void modbus_tcp_server_coil_task(void* param);
 

@@ -8,7 +8,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
+#include "freertos/queue.h"
 
 #include "mbcontroller.h"       // for mbcontroller defines and api
 #include "modbus_params.h"      // for modbus parameters structures
@@ -19,6 +19,8 @@
 #include "modbus_tcp_server.h"
 
 #define SLAVE_TAG "modbus tcp slave"
+
+QueueHandle_t s_modbus_event_queue = NULL;
 
 static void modbus_server_got_ip(void *arg, esp_event_base_t event_base,
                                  int32_t event_id, void *event_data)
@@ -32,13 +34,21 @@ static void modbus_server_got_ip(void *arg, esp_event_base_t event_base,
 void modbus_tcp_server_start()
 {
   modbus_tcp_server_init();
-  xTaskCreate(modbus_tcp_server_task, "modbus_tcp_server_task", 2048, NULL, 2, NULL);
+  xTaskCreate(modbus_tcp_distribute_event_task, "modbus_tcp_distribute_event_task", 2048, NULL, 2, NULL);
+  xTaskCreate(modbus_tcp_switch_task, "modbus_tcp_switch_task", 2048, NULL, 2, NULL);
   ESP_LOGI(SLAVE_TAG, "Modbus slave is initialized.");
 }
 
 void modbus_tcp_server_init()
 {
   void* mbc_slave_handler = NULL;
+  if (NULL == s_modbus_event_queue)
+  {
+    if (!(s_modbus_event_queue = xQueueCreate(MB_EVENT_QUEUE_SIZE,sizeof(modbus_event_t))))
+    {
+      ESP_LOGE(SLAVE_TAG, "Create Modbus Event Queue failed.");
+    }
+  }
   ESP_ERROR_CHECK(mbc_slave_init_tcp(&mbc_slave_handler)); // Initialization of Modbus controller
   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &modbus_server_got_ip, NULL));
   ESP_ERROR_CHECK(mbc_slave_start());
@@ -65,70 +75,28 @@ void modbus_tcp_server_setup()
   ESP_LOGI(SLAVE_TAG, "Modbus slave is setup.");
 }
  
-void modbus_tcp_server_task(void* param)
+void modbus_tcp_distribute_event_task(void* param)
 {
-  ESP_LOGI(SLAVE_TAG, "Start modbus server...");
-  mb_param_info_t reg_info; 
+  ESP_LOGI(SLAVE_TAG, "Start Modbus Distribute Event task...");
+  modbus_event_t modbus_event;
+
+  if(NULL == s_modbus_event_queue)
+  {
+    ESP_LOGE(SLAVE_TAG, "Can't find Modbus event queue.");
+    vTaskDelete( NULL );
+    return;
+  }
+
   while(1)
   {
     // Check for read/write events of Modbus master for certain events
-    mb_event_group_t event = mbc_slave_check_event(MB_READ_WRITE_MASK);
-    ESP_ERROR_CHECK(mbc_slave_get_param_info(&reg_info, MB_PAR_INFO_GET_TOUT));
-    const char* rw_str = (event & MB_READ_MASK) ? "READ" : "WRITE";
-    // Filter events and process them accordingly
-    if(event & (MB_EVENT_HOLDING_REG_WR | MB_EVENT_HOLDING_REG_RD)) {
-      // Get parameter information from parameter queue
-      ESP_LOGI(SLAVE_TAG, "HOLDING %s (%u us), ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
-               rw_str,
-               (uint32_t)reg_info.time_stamp,
-               (uint32_t)reg_info.mb_offset,
-               (uint32_t)reg_info.type,
-               (uint32_t)reg_info.address,
-               (uint32_t)reg_info.size);
-      if (reg_info.address == (uint8_t*)&holding_reg_params.holding_data0)
-      {
-        portENTER_CRITICAL();
-        holding_reg_params.holding_data0 += MB_CHAN_DATA_OFFSET;
-        if (holding_reg_params.holding_data0 >= (MB_CHAN_DATA_MAX_VAL - MB_CHAN_DATA_OFFSET)) {
-          coil_reg_params.coils_port1 = 0xFF;
-        }
-        portEXIT_CRITICAL();
-      }
-    } else if (event & MB_EVENT_INPUT_REG_RD) {
-      ESP_LOGI(SLAVE_TAG, "INPUT READ (%u us), ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
-               (uint32_t)reg_info.time_stamp,
-               (uint32_t)reg_info.mb_offset,
-               (uint32_t)reg_info.type,
-               (uint32_t)reg_info.address,
-               (uint32_t)reg_info.size);
-    } else if (event & MB_EVENT_DISCRETE_RD) {
-      ESP_LOGI(SLAVE_TAG, "DISCRETE READ (%u us): ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
-               (uint32_t)reg_info.time_stamp,
-               (uint32_t)reg_info.mb_offset,
-               (uint32_t)reg_info.type,
-               (uint32_t)reg_info.address,
-               (uint32_t)reg_info.size);
-    } else if (event & MB_EVENT_COILS_RD) {
-      ESP_LOGI(SLAVE_TAG, "COILS READ (%u us), ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
-               (uint32_t)reg_info.time_stamp,
-               (uint32_t)reg_info.mb_offset,
-               (uint32_t)reg_info.type,
-               (uint32_t)reg_info.address,
-               (uint32_t)reg_info.size);
-      
-    } else if (event & MB_EVENT_COILS_WR) {
-      ESP_LOGI(SLAVE_TAG, "COILS WRITE (%u us), ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
-               (uint32_t)reg_info.time_stamp,
-               (uint32_t)reg_info.mb_offset,
-               (uint32_t)reg_info.type,
-               (uint32_t)reg_info.address,
-               (uint32_t)reg_info.size);
-      uint32_t task_param = (uint32_t) reg_info.mb_offset;
-      // switch maybe hold for seconds, create a new task to avoid server task
-      // did not sleep.
-      xTaskCreate(modbus_tcp_server_coil_task, "modbus_tcp_server_coil_task", 2048, (void*)task_param, 2, NULL);
-    }
+    modbus_event.mb_event = mbc_slave_check_event(MB_READ_WRITE_MASK);
+    ESP_ERROR_CHECK(mbc_slave_get_param_info(&modbus_event.mb_params, MB_PAR_INFO_GET_TOUT));
+    xQueueSend(s_modbus_event_queue,(void *)&modbus_event,(TickType_t )MB_EVENT_QUEUE_TOUT);
   }
+
+  ESP_LOGE(SLAVE_TAG, "Modbus Distribute Event task exits...");
+  vTaskDelete( NULL );
 }
 
 static void update_switch_register(uint8_t sw_index, bool status)
@@ -148,12 +116,62 @@ static bool get_coil_status(uint8_t sw_index)
 
 }
 
-void modbus_tcp_server_coil_task(void* param)
+void modbus_tcp_switch_task(void* param)
 {
-  uint8_t sw_index = ((uint32_t)param & 0xFF);
-  bool sw_status = switch_adapter_chg_sta(sw_index, get_coil_status(sw_index));
-  // update modbus register in case it's hold switch
-  update_switch_register(sw_index, sw_status);
+  ESP_LOGI(SLAVE_TAG, "Start Modbus Switch task...");
+  modbus_event_t modbus_event;
+
+  if(NULL == s_modbus_event_queue)
+  {
+    ESP_LOGE(SLAVE_TAG, "Can't find Modbus event queue. Exit task.");
+    vTaskDelete( NULL );
+    return;
+  }
+
+  while (1)
+  {
+    BaseType_t status = xQueueReceive(s_modbus_event_queue, &modbus_event, pdMS_TO_TICKS(MB_EVENT_QUEUE_TOUT)); 
+    if (status == pdTRUE)
+    {
+      if (modbus_event.mb_event & MB_EVENT_COILS_RD)
+      {
+        ESP_LOGI(SLAVE_TAG, "COILS READ (%u us), ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
+                 (uint32_t)modbus_event.mb_params.time_stamp,
+                 (uint32_t)modbus_event.mb_params.mb_offset,
+                 (uint32_t)modbus_event.mb_params.type,
+                 (uint32_t)modbus_event.mb_params.address,
+                 (uint32_t)modbus_event.mb_params.size);
+
+      }
+      else if (modbus_event.mb_event & MB_EVENT_COILS_WR) {
+        ESP_LOGI(SLAVE_TAG, "COILS WRITE (%u us), ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
+                 (uint32_t)modbus_event.mb_params.time_stamp,
+                 (uint32_t)modbus_event.mb_params.mb_offset,
+                 (uint32_t)modbus_event.mb_params.type,
+                 (uint32_t)modbus_event.mb_params.address,
+                 (uint32_t)modbus_event.mb_params.size);
+        uint8_t sw_index = ((uint32_t)modbus_event.mb_params.mb_offset & 0xFF);
+        bool sw_status = switch_adapter_chg_sta(sw_index, get_coil_status(sw_index));
+        // update modbus register in case it's hold switch
+        update_switch_register(sw_index, sw_status);
+      }
+      else
+      {
+        ESP_LOGI(SLAVE_TAG, "Unsupported Operation. (%u us), ADDR:%u, TYPE:%u, INST_ADDR:0x%.4x, SIZE:%u",
+                 (uint32_t)modbus_event.mb_params.time_stamp,
+                 (uint32_t)modbus_event.mb_params.mb_offset,
+                 (uint32_t)modbus_event.mb_params.type,
+                 (uint32_t)modbus_event.mb_params.address,
+                 (uint32_t)modbus_event.mb_params.size);
+ 
+      }
+    }
+    else
+    {
+      ESP_LOGD(SLAVE_TAG, "Receive Modbus Event Queue timeout.");
+    }
+  }
+  ESP_LOGE(SLAVE_TAG, "Modbus Switch task exits...");
   vTaskDelete( NULL );
 }
 
