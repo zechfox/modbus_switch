@@ -33,6 +33,8 @@ enum switch_status {
   STA_ON = 1
 };
 
+typedef void (*status_update_callback_t)(uint8_t sw_index, bool status);
+
 typedef struct conf {
     uint8_t sw_hold_duration:6; // in seconds
     enum switch_type sw_type:1;
@@ -47,11 +49,14 @@ typedef union switch_conf {
 typedef struct switch_context {
   uint8_t sw_gpio_pin;
   SemaphoreHandle_t  sw_mutex_req;
+  TimerHandle_t sw_timer_handler;
+  status_update_callback_t status_update_callback;
   switch_conf_t sw_conf;
 } switch_context_t;
 
 void switch_adapter_init();
 esp_err_t switch_adapter_set_status(uint8_t sw_index, enum switch_status status);
-bool switch_adapter_chg_sta(uint8_t sw_index, bool sw_status);
+esp_err_t switch_adapter_chg_sta(uint8_t sw_index, bool sw_status);
 esp_err_t switch_adapter_get_status(uint8_t sw_index, uint8_t * status);
+void switch_adapter_set_state_update_callback(uint8_t sw_index, void * state_update_callback);
 

@@ -113,7 +113,6 @@ static void update_switch_register(uint8_t sw_index, bool status)
 static bool get_coil_status(uint8_t sw_index)
 {
   return (coil_reg_params.coils_port0 >> sw_index) & 1U;
-
 }
 
 void modbus_tcp_switch_task(void* param)
@@ -127,6 +126,9 @@ void modbus_tcp_switch_task(void* param)
     vTaskDelete( NULL );
     return;
   }
+  switch_adapter_set_state_update_callback(SW1, &update_switch_register);
+  switch_adapter_set_state_update_callback(SW2, &update_switch_register);
+  switch_adapter_set_state_update_callback(SW3, &update_switch_register);
 
   while (1)
   {
@@ -151,9 +153,10 @@ void modbus_tcp_switch_task(void* param)
                  (uint32_t)modbus_event.mb_params.address,
                  (uint32_t)modbus_event.mb_params.size);
         uint8_t sw_index = ((uint32_t)modbus_event.mb_params.mb_offset & 0xFF);
-        bool sw_status = switch_adapter_chg_sta(sw_index, get_coil_status(sw_index));
-        // update modbus register in case it's hold switch
-        update_switch_register(sw_index, sw_status);
+        if (ESP_OK != switch_adapter_chg_sta(sw_index, get_coil_status(sw_index)))
+        {
+          ESP_LOGE(SLAVE_TAG, "Change Switch Status failed.");
+        }
       }
       else
       {
